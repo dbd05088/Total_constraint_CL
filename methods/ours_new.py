@@ -505,7 +505,7 @@ class Ours(CLManagerBase):
     def update_memory(self, sample, sample_num):
         if len(self.memory.images) >= self.memory_size:
             label_frequency = copy.deepcopy(self.memory.cls_count)
-            label_frequency[self.exposed_classes.index(sample['klass'])] += 1
+            label_frequency[self.memory.cls_list.index(sample['klass'])] += 1
             cls_to_replace = np.argmax(np.array(label_frequency))
             cand_idx = self.memory.cls_idx[cls_to_replace]
             idx_to_replace = random.choice(cand_idx)
