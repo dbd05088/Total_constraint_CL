@@ -141,9 +141,9 @@ class Ours(CLManagerBase):
         self.grad_score_per_layer = None
 
         if self.target_layer == "whole_conv2":
-            self.target_layers = ["group1.blocks.block0.conv2.block.0.weight", "group1.blocks.block1.conv2.block.0.weight", "group2.blocks.block0.conv2.block.0.weight", "group2.blocks.block1.conv2.block.0.weight", "group3.blocks.block0.conv2.block.0.weight", "group3.blocks.block1.conv2.block.0.weight", "group4.blocks.block0.conv2.block.0.weight", "group4.blocks.block1.conv2.block.0.weight"]
+            self.target_layers = ["group1.blocks.block0.conv2.block.0.weight", "group1.blocks.block1.conv2.block.0.weight", "group1.blocks.block2.conv2.block.0.weight", "group1.blocks.block3.conv2.block.0.weight", "group1.blocks.block4.conv2.block.0.weight","group2.blocks.block0.conv2.block.0.weight", "group2.blocks.block1.conv2.block.0.weight", "group2.blocks.block2.conv2.block.0.weight", "group2.blocks.block3.conv2.block.0.weight", "group2.blocks.block4.conv2.block.0.weight", "group3.blocks.block0.conv2.block.0.weight", "group3.blocks.block1.conv2.block.0.weight", "group3.blocks.block2.conv2.block.0.weight", "group3.blocks.block3.conv2.block.0.weight", "group3.blocks.block4.conv2.block.0.weight"]
         elif self.target_layer == "last_conv2":
-            self.target_layers = ["group1.blocks.block1.conv2.block.0.weight", "group2.blocks.block1.conv2.block.0.weight", "group3.blocks.block1.conv2.block.0.weight", "group4.blocks.block1.conv2.block.0.weight"]
+            self.target_layers = ["group1.blocks.block4.conv2.block.0.weight", "group2.blocks.block4.conv2.block.0.weight", "group3.blocks.block4.conv2.block.0.weight"]
 
         autograd_hacks.add_hooks(self.model)
         self.selected_mask = {}
@@ -403,7 +403,6 @@ class Ours(CLManagerBase):
 
             _, preds = logit.topk(self.topk, 1, True, True)
 
-
             if self.use_amp:
                 self.scaler.scale(loss).backward()
                 autograd_hacks.compute_grad1(self.model)
@@ -422,7 +421,7 @@ class Ours(CLManagerBase):
             
             if self.sample_num >= 2:
                 self.update_correlation(y)
-            print(self.sim_matrix)
+            #print(self.sim_matrix)
 
             if not self.frozen:
                 self.calculate_fisher()
@@ -702,11 +701,11 @@ class Ours(CLManagerBase):
             if i not in self.freeze_idx or not self.frozen:
                 self.fisher[i] += self.fisher_ema_ratio * (group_fisher[i] - self.fisher[i])
         self.total_fisher = sum(self.fisher)
-        self.cumulative_fisher = [sum(self.fisher[0:i+1]) for i in range(9)]
+        self.cumulative_fisher = [sum(self.fisher[0:i+1]) for i in range(self.num_blocks)]
 
     def get_flops_parameter(self):
         super().get_flops_parameter()
-        self.cumulative_backward_flops = [sum(self.comp_backward_flops[0:i+1]) for i in range(9)]
+        self.cumulative_backward_flops = [sum(self.comp_backward_flops[0:i+1]) for i in range(self.num_blocks)]
         self.total_model_flops = self.forward_flops + self.backward_flops
 
     @torch.no_grad()
@@ -719,17 +718,17 @@ class Ours(CLManagerBase):
         self.last_grad_mean += self.fisher_ema_ratio * (last_grad - self.last_grad_mean)
         freeze_score = []
         freeze_score.append(1)
-        for i in range(9):
+        for i in range(self.num_blocks):
             freeze_score.append(self.total_model_flops / (self.total_model_flops - self.cumulative_backward_flops[i]) * (
                         self.total_fisher - self.cumulative_fisher[i]) / (self.total_fisher + 1e-10))
         max_score = max(freeze_score)
         modified_score = []
         modified_score.append(batch_freeze_score)
-        for i in range(9):
+        for i in range(self.num_blocks):
             modified_score.append(batch_freeze_score*(self.total_fisher - self.cumulative_fisher[i])/(self.total_fisher + 1e-10) + self.cumulative_backward_flops[i]/self.total_model_flops * max_score)
         optimal_freeze = np.argmax(modified_score)
         # print(modified_score, optimal_freeze)
-        self.freeze_idx = list(range(9))[0:optimal_freeze]
+        self.freeze_idx = list(range(self.num_blocks))[0:optimal_freeze]
 
     @torch.no_grad()
     def get_grad(self, logit, label, weight):
