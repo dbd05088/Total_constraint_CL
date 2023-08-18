@@ -1,8 +1,8 @@
 #/bin/bash
 
 # CIL CONFIG
-NOTE="er_total_sigma10_iter0.75" # Short description of the experiment. (WARNING: logs/results with the same note will be overwritten!)
-MODE="er"
+NOTE="baseline_real_clear100_total_sigma0_iter1_mem4000" # Short description of the experiment. (WARNING: logs/results with the same note will be overwritten!)
+MODE="baseline"
 
 K_COEFF="4"
 TEMPERATURE="0.125"
@@ -18,9 +18,9 @@ UNFREEZE_RATE=0.25
 SEEDS="1 2 3"
 
 
-DATASET="cifar100" # cifar10, cifar100, tinyimagenet, imagenet
-ONLINE_ITER=0.75
-SIGMA=10
+DATASET="clear100" # cifar10, cifar100, tinyimagenet, imagenet, SVHN
+ONLINE_ITER=1
+SIGMA=0
 REPEAT=1
 INIT_CLS=100
 USE_AMP="--use_amp"
@@ -39,11 +39,39 @@ elif [ "$DATASET" == "cifar100" ]; then
     MODEL_NAME="resnet32" VAL_PERIOD=500 EVAL_PERIOD=100 
     BATCHSIZE=16; LR=3e-4 OPT_NAME="adam" SCHED_NAME="default" IMP_UPDATE_PERIOD=1
 
+elif [ "$DATASET" == "clear10" ]; then
+    MEM_SIZE=2000
+    N_SMP_CLS="2" K="3" MIR_CANDS=50
+    CANDIDATE_SIZE=100 VAL_SIZE=2
+    MODEL_NAME="resnet32" VAL_PERIOD=500 EVAL_PERIOD=100
+    BATCHSIZE=16; LR=3e-4 OPT_NAME="adam" SCHED_NAME="default" IMP_UPDATE_PERIOD=1
+
+elif [ "$DATASET" == "clear100" ]; then
+    MEM_SIZE=4000
+    N_SMP_CLS="2" K="3" MIR_CANDS=50
+    CANDIDATE_SIZE=100 VAL_SIZE=2
+    MODEL_NAME="resnet32" VAL_PERIOD=500 EVAL_PERIOD=100
+    BATCHSIZE=32; LR=3e-4 OPT_NAME="adam" SCHED_NAME="default" IMP_UPDATE_PERIOD=1
+
+elif [ "$DATASET" == "clear100" ]; then
+    MEM_SIZE=2000
+    N_SMP_CLS="2" K="3" MIR_CANDS=50
+    CANDIDATE_SIZE=100 VAL_SIZE=2
+    MODEL_NAME="resnet32" VAL_PERIOD=500 EVAL_PERIOD=100
+    BATCHSIZE=16; LR=3e-4 OPT_NAME="adam" SCHED_NAME="default" IMP_UPDATE_PERIOD=1
+
 elif [ "$DATASET" == "tinyimagenet" ]; then
     MEM_SIZE=100000
     N_SMP_CLS="3" K="3" MIR_CANDS=100
     CANDIDATE_SIZE=200 VAL_SIZE=2
     MODEL_NAME="resnet18" VAL_PERIOD=500 EVAL_PERIOD=200
+    BATCHSIZE=32; LR=3e-4 OPT_NAME="adam" SCHED_NAME="default" IMP_UPDATE_PERIOD=1
+
+elif [ "$DATASET" == "SVHN" ]; then
+    MEM_SIZE=200
+    N_SMP_CLS="2" K="3" MIR_CANDS=50
+    CANDIDATE_SIZE=100 VAL_SIZE=2
+    MODEL_NAME="resnet32" VAL_PERIOD=500 EVAL_PERIOD=200
     BATCHSIZE=32; LR=3e-4 OPT_NAME="adam" SCHED_NAME="default" IMP_UPDATE_PERIOD=1
 
 elif [ "$DATASET" == "imagenet" ]; then
@@ -60,7 +88,7 @@ fi
 
 for RND_SEED in $SEEDS
 do
-    CUDA_VISIBLE_DEVICES=11 nohup python main_new.py --mode $MODE \
+    CUDA_VISIBLE_DEVICES=7 nohup python main_new.py --mode $MODE \
     --dataset $DATASET --unfreeze_rate $UNFREEZE_RATE $USE_KORNIA --k_coeff $K_COEFF --temperature $TEMPERATURE \
     --sigma $SIGMA --repeat $REPEAT --init_cls $INIT_CLS --samples_per_task 10000 \
     --rnd_seed $RND_SEED --val_memory_size $VAL_SIZE \

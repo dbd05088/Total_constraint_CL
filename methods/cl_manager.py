@@ -71,7 +71,7 @@ class CLManagerBase:
         self.test_datalist = test_datalist
         self.cls_dict = {}
         self.total_samples = len(self.train_datalist)
-
+        self.exposed_domains = []
         self.train_transform, self.test_transform, self.cpu_transform, self.n_classes = get_transform(self.dataset, self.transforms, self.transform_on_gpu)
         self.cutmix = "cutmix" in kwargs["transforms"]
 
@@ -113,7 +113,7 @@ class CLManagerBase:
         self.f_period = kwargs['f_period']
         self.f_next_time = 0
         self.start_time = time.time()
-        num_samples = {'cifar10': 50000, 'cifar100': 50000, 'tinyimagenet': 100000, 'imagenet': 1281167}
+        num_samples = {'cifar10': 50000, 'cifar100': 50000, 'tinyimagenet': 100000, 'imagenet': 1281167, 'SVHN':73257, 'clear10':30000, 'clear100':100000}
         self.total_samples = num_samples[self.dataset]
 
         self.waiting_batch = []
@@ -156,6 +156,10 @@ class CLManagerBase:
         if sample["klass"] not in self.memory.cls_list:
             self.memory.add_new_class(sample["klass"])
             self.dataloader.add_new_class(self.memory.cls_dict)
+
+        if sample["time"] not in self.exposed_domains and "clear" in self.dataset:
+            self.exposed_domains.append(sample["time"])
+
         self.temp_future_batch.append(sample)
         self.future_num_updates += self.online_iter
 
@@ -304,9 +308,10 @@ class CLManagerBase:
         else:
             self.scheduler.step()
 
-
-    def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition, data_time):
+    '''
+    def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition):
         test_df = pd.DataFrame(test_list)
+        #exposed_classes = [int(cls) for cls in self.exposed_classes]
         exp_test_df = test_df[test_df['klass'].isin(self.exposed_classes)]
         test_dataset = ImageDataset(
             exp_test_df,
@@ -322,6 +327,37 @@ class CLManagerBase:
             num_workers=n_worker,
         )
         eval_dict = self.evaluation(test_loader, self.criterion)
+        self.report_test(sample_num, eval_dict["avg_loss"], eval_dict["avg_acc"])
+        return eval_dict
+    '''
+
+    def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition):
+        test_df = pd.DataFrame(test_list)
+        if "clear" in self.dataset:
+            exp_test_df = test_df[test_df['time'] < self.exposed_domains[-1]]
+            if len(self.exposed_domains) == 0:
+                exp_test_df = test_df[test_df['klass'].isin(self.exposed_classes)]
+        else:
+            exp_test_df = test_df[test_df['klass'].isin(self.exposed_classes)]
+
+        print("exposed_domains", self.exposed_domains)
+        print("exposed_classes", self.exposed_classes)
+        print("exp_test_df", len(exp_test_df))
+        test_dataset = ImageDataset(
+            exp_test_df,
+            dataset=self.dataset,
+            transform=self.test_transform,
+            cls_list=self.exposed_classes,
+            data_dir=self.data_dir
+        )
+        test_loader = DataLoader(
+            test_dataset,
+            shuffle=True,
+            batch_size=batch_size,
+            num_workers=n_worker,
+        )
+        eval_dict = self.evaluation(test_loader, self.criterion)
+
         self.report_test(sample_num, eval_dict["avg_loss"], eval_dict["avg_acc"])
 
         if sample_num >= self.f_next_time:

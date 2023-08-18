@@ -12,7 +12,7 @@ import math
 
 import torch.nn as nn
 import torch.nn.functional as F
-
+from collections import defaultdict
 from methods.cl_manager import CLManagerBase, MemoryBase
 from utils.data_loader import cutmix_data, MultiProcessLoader
 from utils import autograd_hacks
@@ -191,6 +191,10 @@ class Ours(CLManagerBase):
             self.memory.add_new_class(sample["klass"])
             self.dataloader.add_new_class(self.memory.cls_dict)
             self.future_add_new_class()
+
+        if sample["time"] not in self.exposed_domains and "clear" in self.dataset:
+            self.exposed_domains.append(sample["time"])
+
         self.update_memory(sample, self.future_sample_num)
         self.future_num_updates += self.online_iter
 
@@ -450,7 +454,7 @@ class Ours(CLManagerBase):
 
         return total_loss / iterations, correct / num_data
 
-    def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition, data_time):
+    def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition):
         # self.corr_map_list.append(copy.deepcopy(self.corr_map))
         # self.sample_count_list.append(copy.deepcopy(self.memory.usage_count))
         # self.labels_list.append(copy.deepcopy(self.memory.labels))
@@ -473,7 +477,7 @@ class Ours(CLManagerBase):
         # with open(labels_list_name, 'wb') as f:
         #     pickle.dump(self.labels_list, f, pickle.HIGHEST_PROTOCOL)
         
-        return super().online_evaluate(test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition, data_time)
+        return super().online_evaluate(test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition)
 
 
     def after_model_update(self):
@@ -501,6 +505,7 @@ class Ours(CLManagerBase):
                 self.total_flops += (len(logit) * 2) / 10e9
         return logit, loss
 
+    '''
     def update_memory(self, sample, sample_num):
         if len(self.memory.images) >= self.memory_size:
             label_frequency = copy.deepcopy(self.memory.cls_count)
@@ -509,6 +514,27 @@ class Ours(CLManagerBase):
             cand_idx = self.memory.cls_idx[cls_to_replace]
             idx_to_replace = random.choice(cand_idx)
             self.memory.replace_sample(sample, sample_num, idx_to_replace)
+        else:
+            self.memory.replace_sample(sample, sample_num)
+    '''
+
+    def update_memory(self, sample, sample_num=None):
+        self.memory.cls_seen_count[self.memory.cls_dict[sample['klass']]] += 1
+        if len(self.memory.images) >= self.memory_size:
+            replace=True
+            if self.memory.cls_count[self.memory.cls_dict[sample['klass']]] > self.memory_size // self.n_classes:
+                j = np.random.randint(0, self.memory.cls_seen_count[self.memory.cls_dict[sample['klass']]])
+                if j > self.memory_size // self.n_classes:
+                    replace = False
+            
+            if replace:
+                label_frequency = copy.deepcopy(self.memory.cls_count)
+                label_frequency[self.exposed_classes.index(sample['klass'])] += 1
+                cls_to_replace = np.argmax(np.array(label_frequency))
+                cand_idx = self.memory.cls_idx[cls_to_replace]
+                idx_to_replace = random.choice(cand_idx)
+                self.memory.replace_sample(sample, sample_num, idx_to_replace)
+                
         else:
             self.memory.replace_sample(sample, sample_num)
 
@@ -753,6 +779,7 @@ class OurMemory(MemoryBase):
         self.device = device
         self.usage_count = torch.Tensor([]).to(self.device)
         self.class_usage_count = torch.Tensor([]).to(self.device)
+        self.cls_seen_count = defaultdict(int)
 
     def replace_sample(self, sample, sample_num, idx=None):
         super().replace_sample(sample, idx)

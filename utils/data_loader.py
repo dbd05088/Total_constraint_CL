@@ -77,7 +77,7 @@ class MultiProcessLoader():
         images = []
         labels = []
         for i in range(self.n_workers):
-            loaded_samples = self.result_queues[i].get(timeout=30.0)
+            loaded_samples = self.result_queues[i].get(timeout=3000.0)
             if loaded_samples is not None:
                 images.append(loaded_samples["image"])
                 labels.append(loaded_samples["label"])
@@ -1653,7 +1653,6 @@ def get_test_datalist(dataset) -> List:
         print("test name", f"collections/{dataset}/{dataset}_val2.json")
         return pd.read_json(f"collections/{dataset}/{dataset}_val2.json").to_dict(orient="records")
 
-
 def get_statistics(dataset: str):
     """
     Returns statistics of the dataset given a string of dataset name. To add new dataset, please add required statistics here
@@ -1668,6 +1667,8 @@ def get_statistics(dataset: str):
         "SVHN",
         "cifar10",
         "cifar100",
+        "clear10",
+        "clear100",
         "CINIC10",
         "imagenet100",
         "imagenet1000",
@@ -1681,6 +1682,8 @@ def get_statistics(dataset: str):
         "SVHN": (0.4377, 0.4438, 0.4728),
         "cifar10": (0.4914, 0.4822, 0.4465),
         "cifar100": (0.5071, 0.4867, 0.4408),
+        "clear10": (0.485, 0.456, 0.406),
+        "clear100": (0.485, 0.456, 0.406),
         "CINIC10": (0.47889522, 0.47227842, 0.43047404),
         "tinyimagenet": (0.4802, 0.4481, 0.3975),
         "imagenet100": (0.485, 0.456, 0.406),
@@ -1695,6 +1698,8 @@ def get_statistics(dataset: str):
         "SVHN": (0.1969, 0.1999, 0.1958),
         "cifar10": (0.2023, 0.1994, 0.2010),
         "cifar100": (0.2675, 0.2565, 0.2761),
+        "clear10": (0.229, 0.224, 0.225),
+        "clear100": (0.229, 0.224, 0.225),
         "CINIC10": (0.24205776, 0.23828046, 0.25874835),
         "tinyimagenet": (0.2302, 0.2265, 0.2262),
         "imagenet100": (0.229, 0.224, 0.225),
@@ -1709,6 +1714,8 @@ def get_statistics(dataset: str):
         "SVHN": 10,
         "cifar10": 10,
         "cifar100": 100,
+        "clear10": 11,
+        "clear100": 100,
         "CINIC10": 10,
         "tinyimagenet": 200,
         "imagenet100": 100,
@@ -1723,6 +1730,8 @@ def get_statistics(dataset: str):
         "SVHN": 3,
         "cifar10": 3,
         "cifar100": 3,
+        "clear10": 3,
+        "clear100": 3,
         "CINIC10": 3,
         "tinyimagenet": 3,
         "imagenet100": 3,
@@ -1737,6 +1746,8 @@ def get_statistics(dataset: str):
         "SVHN": 32,
         "cifar10": 32,
         "cifar100": 32,
+        "clear10": 224,
+        "clear100": 224,
         "CINIC10": 32,
         "tinyimagenet": 64,
         "imagenet100": 224,

@@ -407,9 +407,13 @@ def select_model(model_name, dataset, num_classes=None, opt_dict=None):
 
     if "mnist" in dataset:
         model_class = getattr(mnist, "MLP")
-    elif "cifar" in dataset:
+    elif "cifar" in dataset or "clear" in dataset:
         model_class = getattr(cifar, "ResNet")
     elif "imagenet" in dataset:
+        #model_class = getattr(imagenet, "ResNet")
+        model_imagenet=True
+        model_class = getattr(cifar, "ResNet")
+    elif "SVHN" in dataset:
         #model_class = getattr(imagenet, "ResNet")
         model_imagenet=True
         model_class = getattr(cifar, "ResNet")
