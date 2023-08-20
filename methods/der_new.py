@@ -57,6 +57,10 @@ class DER(CLManagerBase):
         if sample["klass"] not in self.memory.cls_list:
             self.memory.add_new_class(sample["klass"])
             self.dataloader.add_new_class(self.memory.cls_dict)
+
+        if sample["time"] not in self.exposed_domains and "clear" in self.dataset:
+            self.exposed_domains.append(sample["time"])
+
         self.temp_future_batch.append(sample)
         self.future_num_updates += self.online_iter
 
