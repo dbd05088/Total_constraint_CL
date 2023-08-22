@@ -333,10 +333,16 @@ class CLManagerBase:
 
     def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition):
         test_df = pd.DataFrame(test_list)
+        '''
         if "clear" in self.dataset:
             exp_test_df = test_df[test_df['time'] < self.exposed_domains[-1]]
             if len(self.exposed_domains) == 0:
                 exp_test_df = test_df[test_df['klass'].isin(self.exposed_classes)]
+        '''
+        if "clear" in self.dataset:
+            exp_test_df = test_df[test_df['time'] <= self.exposed_domains[-1]]
+            if len(self.exposed_domains) == 1:
+                exp_test_df = exp_test_df[exp_test_df['klass'].isin(self.exposed_classes)]
         else:
             exp_test_df = test_df[test_df['klass'].isin(self.exposed_classes)]
 
