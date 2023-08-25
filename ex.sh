@@ -1,25 +1,25 @@
 #/bin/bash
 
 # CIL CONFIG
-NOTE="baseline_real_clear100_total_sigma0_iter1_mem4000" # Short description of the experiment. (WARNING: logs/results with the same note will be overwritten!)
-MODE="baseline"
+NOTE="ours_real_imgnet_total_sigma0_iter0.25_mem20000" # Short description of the experiment. (WARNING: logs/results with the same note will be overwritten!)
+MODE="ours"
 
 K_COEFF="4"
 TEMPERATURE="0.125"
 
 TRANSFORM_ON_GPU="--transform_on_gpu"
 N_WORKER=3
-FUTURE_STEPS=3
+FUTURE_STEPS=4
 EVAL_N_WORKER=3
 EVAL_BATCH_SIZE=1000
 #USE_KORNIA="--use_kornia"
 USE_KORNIA=""
 UNFREEZE_RATE=0.25
-SEEDS="1 2 3"
+SEEDS="1"
 
 
-DATASET="clear100" # cifar10, cifar100, tinyimagenet, imagenet, SVHN
-ONLINE_ITER=1
+DATASET="imagenet" # cifar10, cifar100, tinyimagenet, imagenet, SVHN
+ONLINE_ITER=0.25
 SIGMA=0
 REPEAT=1
 INIT_CLS=100
@@ -75,10 +75,10 @@ elif [ "$DATASET" == "SVHN" ]; then
     BATCHSIZE=32; LR=3e-4 OPT_NAME="adam" SCHED_NAME="default" IMP_UPDATE_PERIOD=1
 
 elif [ "$DATASET" == "imagenet" ]; then
-    MEM_SIZE=1281167
+    MEM_SIZE=20000
     N_SMP_CLS="3" K="3" MIR_CANDS=800
     CANDIDATE_SIZE=1000 VAL_SIZE=2
-    MODEL_NAME="resnet18" EVAL_PERIOD=8000 F_PERIOD=200000
+    MODEL_NAME="resnet32" EVAL_PERIOD=8000 F_PERIOD=200000
     BATCHSIZE=256; LR=3e-4 OPT_NAME="adam" SCHED_NAME="default" IMP_UPDATE_PERIOD=10
 
 else
@@ -88,9 +88,9 @@ fi
 
 for RND_SEED in $SEEDS
 do
-    CUDA_VISIBLE_DEVICES=7 nohup python main_new.py --mode $MODE \
+    CUDA_VISIBLE_DEVICES=1 nohup python main_new.py --mode $MODE \
     --dataset $DATASET --unfreeze_rate $UNFREEZE_RATE $USE_KORNIA --k_coeff $K_COEFF --temperature $TEMPERATURE \
-    --sigma $SIGMA --repeat $REPEAT --init_cls $INIT_CLS --samples_per_task 10000 \
+    --sigma $SIGMA --repeat $REPEAT --init_cls $INIT_CLS --samples_per_task 10000 --data_dir ~/smh/ILSVRC/Data/CLS-LOC/ \
     --rnd_seed $RND_SEED --val_memory_size $VAL_SIZE \
     --model_name $MODEL_NAME --opt_name $OPT_NAME --sched_name $SCHED_NAME \
     --lr $LR --batchsize $BATCHSIZE --mir_cands $MIR_CANDS \

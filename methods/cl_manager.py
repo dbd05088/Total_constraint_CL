@@ -308,7 +308,6 @@ class CLManagerBase:
         else:
             self.scheduler.step()
 
-    '''
     def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition):
         test_df = pd.DataFrame(test_list)
         #exposed_classes = [int(cls) for cls in self.exposed_classes]
@@ -330,15 +329,8 @@ class CLManagerBase:
         self.report_test(sample_num, eval_dict["avg_loss"], eval_dict["avg_acc"])
         return eval_dict
     '''
-
     def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition):
         test_df = pd.DataFrame(test_list)
-        '''
-        if "clear" in self.dataset:
-            exp_test_df = test_df[test_df['time'] < self.exposed_domains[-1]]
-            if len(self.exposed_domains) == 0:
-                exp_test_df = test_df[test_df['klass'].isin(self.exposed_classes)]
-        '''
         if "clear" in self.dataset:
             exp_test_df = test_df[test_df['time'] <= self.exposed_domains[-1]]
             if len(self.exposed_domains) == 1:
@@ -370,7 +362,7 @@ class CLManagerBase:
             self.get_forgetting(sample_num, test_list, cls_dict, batch_size, n_worker)
             self.f_next_time += self.f_period
         return eval_dict
-
+    '''
 
     def evaluation(self, test_loader, criterion):
         total_correct, total_num_data, total_loss = 0.0, 0.0, 0.0
