@@ -67,6 +67,7 @@ class CLManagerBase:
         if self.use_amp:
             self.scaler = torch.cuda.amp.GradScaler()
 
+
         self.train_datalist = train_datalist
         self.test_datalist = test_datalist
         self.cls_dict = {}

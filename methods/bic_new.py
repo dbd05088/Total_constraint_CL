@@ -44,19 +44,20 @@ class BiasCorrection(ER):
     def __init__(
         self, train_datalist, test_datalist, device, **kwargs
     ):
-        kwargs["memory_size"] -= kwargs["val_memory_size"]
+        #kwargs["memory_size"] -= kwargs["val_memory_size"]
 
         self.bias_layer = None
         self.valid_list = []
         self.future_valid_list = []
-
-        self.valid_size = kwargs["val_memory_size"]
+        self.memory_size = kwargs["memory_size"]
+        self.valid_size =  round(self.memory_size * 0.1) #kwargs["val_memory_size"]
 
         self.n_tasks = kwargs["n_tasks"]
         self.bias_layer_list = []
         self.distilling = True
         self.samples_per_task = kwargs["samples_per_task"]
 
+        self.future_val_per_cls = self.valid_size
         self.val_per_cls = self.valid_size
         self.val_full = False
         self.future_val_full = False
@@ -73,6 +74,8 @@ class BiasCorrection(ER):
         super().__init__(
             train_datalist, test_datalist, device, **kwargs
         )
+        self.memory_size -= self.valid_size
+        print("self.memory_size", self.memory_size)
         self.prev_model = select_model(
             self.model_name, self.dataset, 1
         )
@@ -120,7 +123,10 @@ class BiasCorrection(ER):
         if sample["klass"] not in self.memory.cls_list:
             self.memory.add_new_class(sample["klass"])
             self.dataloader.add_new_class(self.memory.cls_dict)
-            self.val_full = False
+            #self.val_full = False
+            if len(self.memory.cls_list) > 1:
+                self.future_reduce_valid(len(self.memory.cls_list))
+
         use_sample = self.future_valid_update(sample)
         self.use_sample[self.future_sample_num] = use_sample
         self.future_num_updates += self.online_iter
@@ -134,6 +140,19 @@ class BiasCorrection(ER):
                 self.future_num_updates -= int(self.future_num_updates)
         self.future_sample_num += 1
         return 0
+
+    def future_reduce_valid(self, num_learned_class):
+        self.future_val_per_cls = self.valid_size // num_learned_class
+        val_df = pd.DataFrame(self.future_valid_list)
+        valid_list = []
+        for klass in val_df["klass"].unique():
+            class_val = val_df[val_df.klass == klass]
+            if len(class_val) > self.future_val_per_cls:
+                new_class_val = class_val.sample(n=self.future_val_per_cls)
+            else:
+                new_class_val = class_val
+            valid_list += new_class_val.to_dict(orient="records")
+        self.future_valid_list = valid_list
 
     def online_step(self, sample, sample_num, n_worker):
         if (sample_num-1) % self.samples_per_task == 0:
@@ -150,7 +169,13 @@ class BiasCorrection(ER):
                 self.temp_batch = []
                 self.num_updates -= int(self.num_updates)
         else:
+            #print("here")
             self.online_valid_update(sample)
+        '''
+        print("self.num_learned_class", self.num_learned_class)
+        print("self.val_per_cls", self.val_per_cls)
+        print("len(self.valid_list)", len(self.valid_list))
+        '''
 
     def add_new_class(self, class_name):
         self.exposed_classes.append(class_name)
@@ -169,8 +194,26 @@ class BiasCorrection(ER):
         self.optimizer.add_param_group({'params': self.model.fc.parameters()})
 
         self.bias_labels[self.cur_iter].append(self.num_learned_class - 1)
+        
+        if self.num_learned_class > 1:
+            self.online_reduce_valid(self.num_learned_class)
+
         if 'reset' in self.sched_name:
             self.update_schedule(reset=True)
+
+    def online_reduce_valid(self, num_learned_class):
+        self.val_per_cls = self.valid_size//num_learned_class
+        val_df = pd.DataFrame(self.valid_list)
+        valid_list = []
+        for klass in val_df["klass"].unique():
+            class_val = val_df[val_df.klass == klass]
+            if len(class_val) > self.val_per_cls:
+                new_class_val = class_val.sample(n=self.val_per_cls)
+            else:
+                new_class_val = class_val
+            valid_list += new_class_val.to_dict(orient="records")
+        self.valid_list = valid_list
+        self.val_full = False
 
     def online_valid_update(self, sample):
         self.valid_list.append(sample)
@@ -178,15 +221,21 @@ class BiasCorrection(ER):
             self.val_full = True
         else:
             self.val_full = False
+        '''
+        print("self.num_learned_class", self.num_learned_class)
+        print("self.val_per_cls", self.val_per_cls)
+        print("len(self.valid_list)", len(self.valid_list))
+        print()
+        '''
 
     def future_valid_update(self, sample):
         val_df = pd.DataFrame(self.future_valid_list, columns=['klass', 'file_name', 'label'])
-        if len(val_df[val_df["klass"] == sample["klass"]]) < self.val_per_cls:
+        if len(val_df[val_df["klass"] == sample["klass"]]) < self.future_val_per_cls:
             self.future_valid_list.append(sample)
             use_sample = False
         else:
             use_sample = True
-        if len(self.future_valid_list) == self.val_per_cls * self.num_learned_class:
+        if len(self.future_valid_list) == self.future_val_per_cls * self.num_learned_class:
             self.future_val_full = True
         else:
             self.future_val_full = False
@@ -254,6 +303,7 @@ class BiasCorrection(ER):
 
             _, preds = logit_new.topk(self.topk, 1, True, True)
             loss = loss_c + loss_d
+
             if self.use_amp:
                 self.scaler.scale(loss).backward()
                 self.scaler.unscale_(self.optimizer)
@@ -264,7 +314,13 @@ class BiasCorrection(ER):
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10)
                 self.optimizer.step()
-
+            
+            '''
+            for idx, (name, param) in enumerate(self.model.named_parameters()):
+                if idx==0:
+                    print(name, param[1, :10])
+            '''
+                
             self.update_schedule()
             total_loss += loss.item()
             distill_loss += loss_d.item()
@@ -278,10 +334,11 @@ class BiasCorrection(ER):
         bias_labels = self.bias_labels[iter]
         bias_layer = self.bias_layer_list[iter]
         if len(bias_labels) > 0:
+            #print("bias forwarded")
             input[:, bias_labels] = bias_layer(input[:, bias_labels])
         return input
 
-    def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition, data_time):
+    def online_evaluate(self, test_list, sample_num, batch_size, n_worker, cls_dict, cls_addition):
         self.online_bias_correction()
         test_df = pd.DataFrame(test_list)
         exp_test_df = test_df[test_df['klass'].isin(self.exposed_classes)]
@@ -333,16 +390,16 @@ class BiasCorrection(ER):
 
         eval_dict = self.evaluation(test_loader, self.criterion)
         self.report_test(sample_num, eval_dict["avg_loss"], eval_dict["avg_acc"])
-
+        '''
         if sample_num >= self.f_next_time:
             self.get_forgetting(sample_num, test_list, cls_dict, batch_size, n_worker)
             self.f_next_time += self.f_period
+        '''
         return eval_dict
 
     def online_bias_correction(self, n_iter=256, batch_size=100, n_worker=4):
         self.bias_layer_list[self.cur_iter] = BiasCorrectionLayer().to(self.device)
         self.bias_layer = self.bias_layer_list[self.cur_iter]
-        print(self.cur_iter, self.bias_labels)
 
         if self.val_full and self.cur_iter > 0 and len(self.bias_labels[self.cur_iter]) > 0:
             val_df = pd.DataFrame(self.valid_list)
@@ -392,6 +449,8 @@ class BiasCorrection(ER):
                 )
             assert total_loss is not None
             self.print_bias_layer_parameters()
+        else:
+            print("??")
 
     def distillation_loss(self, old_logit, new_logit):
         # new_logit should have same dimension with old_logit.(dimension = n)
